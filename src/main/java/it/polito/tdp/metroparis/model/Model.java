@@ -1,11 +1,17 @@
 package it.polito.tdp.metroparis.model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
-
+import java.util.Map;
 
 import org.jgrapht.Graph;
 import org.jgrapht.Graphs;
+import org.jgrapht.event.ConnectedComponentTraversalEvent;
+import org.jgrapht.event.EdgeTraversalEvent;
+import org.jgrapht.event.TraversalListener;
+import org.jgrapht.event.VertexTraversalEvent;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.SimpleGraph;
 import org.jgrapht.traverse.BreadthFirstIterator;
@@ -16,6 +22,7 @@ import it.polito.tdp.metroparis.db.MetroDAO;
 public class Model {
 
 	Graph<Fermata, DefaultEdge> grafo;
+	Map<Fermata, Fermata> predecessore;
 	
 	public void creaGrafo() {
 		this.grafo = new SimpleGraph<>(DefaultEdge.class);
@@ -77,6 +84,53 @@ public class Model {
 		//in ampiezza
 		BreadthFirstIterator<Fermata,DefaultEdge> bfv = new BreadthFirstIterator<>(this.grafo, partenza);
 		
+		this.predecessore = new HashMap<>();
+		this.predecessore.put(partenza, null);
+		
+		//creo listener per ottenere info di fermate precedenti
+		bfv.addTraversalListener(new TraversalListener<Fermata, DefaultEdge>(){ //essendo interfaccia va implementato tale che viene definito un oggetto con classe senza nome
+				//-->creazione di classe inline
+
+			@Override
+			public void connectedComponentFinished(ConnectedComponentTraversalEvent e) {
+			}
+
+			@Override
+			public void connectedComponentStarted(ConnectedComponentTraversalEvent e) {
+			}
+			//e rappresenta evento da cui si estraggono informazioni necessarie
+			@Override
+			public void edgeTraversed(EdgeTraversalEvent<DefaultEdge> e) {
+				//conviene usare questo metodo perchè memorizza sia vertici che arco tale da non avere operazioni complicate per trovare predecessore
+				DefaultEdge arco = e.getEdge();
+				Fermata a = grafo.getEdgeSource(arco);
+				Fermata b = grafo.getEdgeTarget(arco);
+				//essendo grafo non orientato target e source sono associati alla creazione quindi devo controllare se si è già attraversato uno due perchè il verso di attraversamento è indifferente
+				//ho scoperto 'a' arrivando da 'b' se b lo si conosce già
+				if(predecessore.containsKey(b) && !predecessore.containsKey(a)) {
+					predecessore.put(a, b);
+//					System.out.println(a+" scoperto da "+b);
+				}else if(predecessore.containsKey(a) && !predecessore.containsKey(b)){
+					//se conoscevo 'a' allora si ottiene 'b'
+					predecessore.put(b, a);
+//					System.out.println(b+" scoperto da "+a);
+				}
+			}
+
+			@Override
+			public void vertexTraversed(VertexTraversalEvent<Fermata> e) {
+/*				Fermata nuova = e.getVertex();
+//				Fermata precedente ; //vertice adiacente a 'nuova' e che sia già presente nella key map
+					//ciclo nella mappa
+				predecessore.put(nuova,precedente); //closure permette che la classe definita all'interno di un'altra classe può accedere ai parametri della classe in cui è contenuta
+*/				
+			}
+
+			@Override
+			public void vertexFinished(VertexTraversalEvent<Fermata> e) {
+			}
+			
+		});
 		//in profondità
 		//DepthFirstIterator<Fermata,DefaultEdge> dfv = new DepthFirstIterator<>(this.grafo,partenza);
 		
@@ -98,5 +152,21 @@ public class Model {
 			}
 		}
 		return null;
+	}
+	
+	//per ottenere una lista ordinata del cammino tra due vertici
+	public List<Fermata> trovaCammino(Fermata partenza, Fermata arrivo) {
+		fermateRaggiungibili(partenza); // usato per creare mappa predecessori
+			//--> output è una lista di tutte le fermate quindi non mi serve
+		
+		List<Fermata> result = new LinkedList<>(); // conviene rispetto a ArrayList perchè ha costo minore l'aggiunta in testa
+		result.add(arrivo);
+		Fermata f = arrivo;
+		while(predecessore.get(f)!=null) {
+			f = predecessore.get(f);			
+			result.add(0,f);
+		}
+		
+		return result;
 	}
 }
